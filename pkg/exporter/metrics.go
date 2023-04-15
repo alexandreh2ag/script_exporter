@@ -2,18 +2,22 @@ package exporter
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-kit/log/level"
 	"github.com/ricoberger/script_exporter/pkg/config"
 	"github.com/ricoberger/script_exporter/pkg/version"
 
+	promClientApi "github.com/prometheus/client_golang/api"
+	promClientV1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	promClientHttp "github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func (e *Exporter) MetricsHandler(w http.ResponseWriter, r *http.Request) {
@@ -123,12 +127,12 @@ func (e *Exporter) MetricsHandler(w http.ResponseWriter, r *http.Request) {
 // and then wraps up a http.HandlerFunc into a http.Handler that
 // properly counts all of the metrics when a request happens.
 //
-// Portions of it are taken from the promhttp examples.
+// Portions of it are taken from the prometheusHttp examples.
 //
 // We use the 'scripts' namespace for our internal metrics so that
 // they don't collide with the 'script' namespace for probe results.
 func SetupMetrics(h http.HandlerFunc) http.Handler {
-	// Broad metrics provided by promhttp, namespaced into
+	// Broad metrics provided by prometheusHttp, namespaced into
 	// 'http' to make what they're about clear from their
 	// names.
 	reqs := prometheus.NewCounterVec(
@@ -189,10 +193,67 @@ func SetupMetrics(h http.HandlerFunc) http.Handler {
 
 	// We don't use InstrumentHandlerInFlight, because that
 	// duplicates what we're doing on a per-script basis. The
-	// other promhttp handlers don't duplicate this work, because
+	// other prometheusHttp handlers don't duplicate this work, because
 	// they capture result code and method. This is slightly
 	// questionable, but there you go.
-	return promhttp.InstrumentHandlerDuration(rdur,
-		promhttp.InstrumentHandlerCounter(reqs,
+	return promClientHttp.InstrumentHandlerDuration(rdur,
+		promClientHttp.InstrumentHandlerCounter(reqs,
 			instrumentScript(sdur, sreqs, sif, h)))
+}
+
+func (e *Exporter) ProbeStatusHandler(w http.ResponseWriter, r *http.Request) {
+	promUrl := fmt.Sprintf(
+		"%s://%s:%s%s",
+		e.Config.Prometheus.Scheme,
+		e.Config.Prometheus.Host,
+		e.Config.Prometheus.Port,
+		strings.TrimSuffix(e.Config.Prometheus.Path, "/"),
+	)
+	client, err := promClientApi.NewClient(promClientApi.Config{
+		Address: promUrl,
+	})
+	if err != nil {
+		level.Error(e.Logger).Log("err", "Failed to init prometheus client", err)
+	}
+	clientApi := promClientV1.NewAPI(client)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	rules, err := clientApi.Rules(ctx)
+	if err != nil {
+		level.Error(e.Logger).Log("err", "Failed to fetch prometheus rules", err)
+	}
+
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
+	results := []string{}
+	i := 0
+	for _, group := range rules.Groups {
+		for _, rule := range group.Rules {
+			if ruleAlert, ok := rule.(promClientV1.AlertingRule); ok {
+				wg.Add(1)
+
+				go func() {
+					defer wg.Done()
+					res, errFetch := fetchProbeOk(e.Logger, clientApi, ctx, promUrl, ruleAlert)
+					if errFetch != nil {
+						level.Error(e.Logger).Log("err", "An error occurred to fetch prometheus rule", ruleAlert.Name, err)
+						return
+					}
+					mu.Lock()
+					results = append(results, res...)
+					mu.Unlock()
+
+				}()
+				i++
+			}
+		}
+	}
+	wg.Wait()
+	body := strings.Join(results[:], "\n")
+	w.Header().Set("Content-Type", "text/plain")
+	_, err = w.Write([]byte(body))
+	if err != nil {
+		level.Error(e.Logger).Log("err", "Failed to write to response buffer", err)
+	}
 }

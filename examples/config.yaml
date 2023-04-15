@@ -18,6 +18,12 @@ discovery:
   # scheme: https
   # path: /prefix-path
 
+prometheus:
+  host: localhost
+  port: 9090
+  scheme: http
+  path: /
+
 scripts:
   - name: test
     command: ./examples/test.sh

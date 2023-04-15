@@ -44,6 +44,13 @@ type Config struct {
 		Scheme string `yaml:"scheme"`
 		Path   string `yaml:"path"`
 	} `yaml:"discovery"`
+
+	Prometheus struct {
+		Host   string `yaml:"host"`
+		Port   string `yaml:"port"`
+		Scheme string `yaml:"scheme"`
+		Path   string `yaml:"path"`
+	} `yaml:"prometheus"`
 }
 
 // ScriptConfig is the configuration for a single script.

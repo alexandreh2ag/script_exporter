@@ -130,6 +130,7 @@ func InitExporter() (e *Exporter) {
 	// required for all routes.
 	router := http.NewServeMux()
 
+	router.HandleFunc("/probes-ok", e.ProbeStatusHandler)
 	router.Handle("/probe", SetupMetrics(e.MetricsHandler))
 	router.Handle("/metrics", promhttp.Handler())
 	router.HandleFunc("/discovery", func(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +144,7 @@ func InitExporter() (e *Exporter) {
 			port = "9469"
 		}
 		scheme := "http"
-		path   := ""
+		path := ""
 		if len(e.Config.Discovery.Host) > 0 {
 			host = e.Config.Discovery.Host
 		}
@@ -174,6 +175,7 @@ func InitExporter() (e *Exporter) {
 		<h1>Script Exporter</h1>
 		<p><a href='/metrics'>Metrics</a></p>
 		<p><a href='/probe'>Probe</a></p>
+		<p><a href='/probes-ok'>Probe Ok</a></p>
 		<p><ul>
 		<li>version: ` + version.Version + `</li>
 		<li>branch: ` + version.Branch + `</li>
