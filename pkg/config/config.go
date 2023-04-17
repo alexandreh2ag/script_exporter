@@ -46,10 +46,12 @@ type Config struct {
 	} `yaml:"discovery"`
 
 	Prometheus struct {
-		Host   string `yaml:"host"`
-		Port   string `yaml:"port"`
-		Scheme string `yaml:"scheme"`
-		Path   string `yaml:"path"`
+		Enable     bool     `yaml:"enable"`
+		Host       string   `yaml:"host"`
+		Port       string   `yaml:"port"`
+		Scheme     string   `yaml:"scheme"`
+		Path       string   `yaml:"path"`
+		KeepLabels []string `yaml:"keep_labels"`
 	} `yaml:"prometheus"`
 }
 

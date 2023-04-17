@@ -16,7 +16,7 @@ import (
 
 	promClientApi "github.com/prometheus/client_golang/api"
 	promClientV1 "github.com/prometheus/client_golang/api/prometheus/v1"
-	"github.com/prometheus/client_golang/prometheus"
+	promClient "github.com/prometheus/client_golang/prometheus"
 	promClientHttp "github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -135,40 +135,40 @@ func SetupMetrics(h http.HandlerFunc) http.Handler {
 	// Broad metrics provided by prometheusHttp, namespaced into
 	// 'http' to make what they're about clear from their
 	// names.
-	reqs := prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	reqs := promClient.NewCounterVec(
+		promClient.CounterOpts{
 			Namespace: "http",
 			Name:      "requests_total",
 			Help:      "Total requests for scripts by HTTP result code and method.",
 		},
 		[]string{"code", "method"})
-	rdur := prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Namespace:  "http",
-			Name:       "requests_duration_seconds",
-			Help:       "A summary of request durations by HTTP result code and method.",
-			Objectives: map[float64]float64{0.25: 0.05, 0.5: 0.05, 0.75: 0.02, 0.9: 0.01, 0.99: 0.001, 1.0: 0.001},
+	rdur := promClient.NewHistogramVec(
+		promClient.HistogramOpts{
+			Namespace: "http",
+			Name:      "requests_duration_seconds",
+			Help:      "A summary of request durations by HTTP result code and method.",
+			Buckets:   promClient.ExponentialBuckets(0.1, 1.5, 5),
 		},
 		[]string{"code", "method"})
 
 	// Our per-script metrics, counting requests in flight and
 	// requests total, and providing a time distribution.
-	sreqs := prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	sreqs := promClient.NewCounterVec(
+		promClient.CounterOpts{
 			Namespace: "scripts",
 			Name:      "requests_total",
 			Help:      "Total requests to a script",
 		},
 		[]string{"script"})
-	sif := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
+	sif := promClient.NewGaugeVec(
+		promClient.GaugeOpts{
 			Namespace: "scripts",
 			Name:      "requests_inflight",
 			Help:      "Number of requests in flight to a script",
 		},
 		[]string{"script"})
-	sdur := prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
+	sdur := promClient.NewSummaryVec(
+		promClient.SummaryOpts{
 			Namespace:  "scripts",
 			Name:       "duration_seconds",
 			Help:       "A summary of request durations to a script",
@@ -179,8 +179,8 @@ func SetupMetrics(h http.HandlerFunc) http.Handler {
 	)
 
 	// We also publish build information through a metric.
-	buildInfo := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
+	buildInfo := promClient.NewGaugeVec(
+		promClient.GaugeOpts{
 			Namespace: "scripts",
 			Name:      "build_info",
 			Help:      "A metric with a constant '1' value labeled by build information.",
@@ -189,16 +189,20 @@ func SetupMetrics(h http.HandlerFunc) http.Handler {
 	)
 	buildInfo.WithLabelValues(version.Version, version.Revision, version.Branch, version.GoVersion, version.BuildDate, version.BuildUser).Set(1)
 
-	prometheus.MustRegister(rdur, reqs, sreqs, sif, sdur, buildInfo)
+	promClient.MustRegister(rdur, reqs, sreqs, sif, sdur, buildInfo)
 
 	// We don't use InstrumentHandlerInFlight, because that
 	// duplicates what we're doing on a per-script basis. The
 	// other prometheusHttp handlers don't duplicate this work, because
 	// they capture result code and method. This is slightly
 	// questionable, but there you go.
-	return promClientHttp.InstrumentHandlerDuration(rdur,
-		promClientHttp.InstrumentHandlerCounter(reqs,
-			instrumentScript(sdur, sreqs, sif, h)))
+	return promClientHttp.InstrumentHandlerDuration(
+		rdur,
+		promClientHttp.InstrumentHandlerCounter(
+			reqs,
+			instrumentScript(sdur, sreqs, sif, h),
+		),
+	)
 }
 
 func (e *Exporter) ProbeStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -235,7 +239,7 @@ func (e *Exporter) ProbeStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 				go func() {
 					defer wg.Done()
-					res, errFetch := fetchProbeOk(e.Logger, clientApi, ctx, promUrl, ruleAlert)
+					res, errFetch := e.fetchProbeOk(clientApi, ctx, promUrl, ruleAlert)
 					if errFetch != nil {
 						level.Error(e.Logger).Log("err", "An error occurred to fetch prometheus rule", ruleAlert.Name, err)
 						return

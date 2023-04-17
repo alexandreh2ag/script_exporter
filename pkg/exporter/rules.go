@@ -3,7 +3,6 @@ package exporter
 import (
 	"context"
 	"fmt"
-	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	promClientV1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	promCommonModel "github.com/prometheus/common/model"
@@ -19,7 +18,7 @@ import (
 const labelNameExprReverse = "expr_reversed"
 const labelNameAlertState = "alertstate"
 
-func fetchProbeOk(logger log.Logger, clientApi promClientV1.API, ctx context.Context, promUrl string, rule promClientV1.AlertingRule) ([]string, error) {
+func (e *Exporter) fetchProbeOk(clientApi promClientV1.API, ctx context.Context, promUrl string, rule promClientV1.AlertingRule) ([]string, error) {
 	var results []string
 
 	query := ""
@@ -37,12 +36,12 @@ func fetchProbeOk(logger log.Logger, clientApi promClientV1.API, ctx context.Con
 	res, warning, err := clientApi.Query(ctx, query, ts, promClientV1.WithTimeout(5*time.Second))
 
 	if err != nil {
-		level.Error(logger).Log("err", "An error occurred when query prometheus", err)
+		level.Error(e.Logger).Log("err", "An error occurred when query prometheus", err)
 		return results, err
 	}
 
 	for _, warn := range warning {
-		level.Warn(logger).Log("warn", "An warning occurred when query prometheus", warn)
+		level.Warn(e.Logger).Log("warn", "An warning occurred when query prometheus", warn)
 	}
 
 	vector := res.(promCommonModel.Vector)
@@ -55,6 +54,9 @@ func fetchProbeOk(logger log.Logger, clientApi promClientV1.API, ctx context.Con
 		labelsMap := make(map[string]string, len(sample.Metric))
 		for name, value := range sample.Metric {
 			labelsMap[string(name)] = string(value)
+			if contains(e.Config.Prometheus.KeepLabels, string(name)) {
+				labels[name] = value
+			}
 		}
 		tmplData := promTemplate.AlertTemplateData(labelsMap, nil, promUrl, 0)
 		// Inject some convenience variables that are easier to remember for users
@@ -82,7 +84,7 @@ func fetchProbeOk(logger log.Logger, clientApi promClientV1.API, ctx context.Con
 			result, errTmpl := tmpl.Expand()
 			if errTmpl != nil {
 				result = fmt.Sprintf("<error expanding promTemplate: %s>", errTmpl)
-				level.Warn(logger).Log("msg", "Expanding alert prometheus failed", "err", errTmpl, "data", tmplData)
+				level.Warn(e.Logger).Log("msg", "Expanding alert prometheus failed", "err", errTmpl, "data", tmplData)
 			}
 			return result
 		}
@@ -95,4 +97,14 @@ func fetchProbeOk(logger log.Logger, clientApi promClientV1.API, ctx context.Con
 	}
 
 	return results, nil
+}
+
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+
+	return false
 }

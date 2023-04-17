@@ -19,10 +19,12 @@ discovery:
   # path: /prefix-path
 
 prometheus:
+  enable: true
   host: localhost
   port: 9090
   scheme: http
   path: /
+  keep_labels: [envname, project]
 
 scripts:
   - name: test
