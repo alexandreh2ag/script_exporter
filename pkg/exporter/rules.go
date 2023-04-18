@@ -46,7 +46,7 @@ func (e *Exporter) fetchProbeOk(clientApi promClientV1.API, ctx context.Context,
 
 	vector := res.(promCommonModel.Vector)
 	for _, sample := range vector {
-		labels := rule.Labels
+		labels := rule.Labels.Clone()
 		labels[promCommonModel.AlertNameLabel] = promCommonModel.LabelValue(rule.Name)
 		labels[labelNameAlertState] = "ok"
 		labels[promCommonModel.InstanceLabel] = sample.Metric[promCommonModel.InstanceLabel]
