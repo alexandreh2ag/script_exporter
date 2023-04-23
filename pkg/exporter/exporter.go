@@ -130,8 +130,8 @@ func InitExporter() (e *Exporter) {
 	// required for all routes.
 	router := http.NewServeMux()
 
-	if e.Config.Prometheus.Enable {
-		router.HandleFunc("/probes-ok", e.ProbeStatusHandler)
+	if e.Config.ProbeStatus.Enable {
+		router.HandleFunc("/probes-status", e.ProbeStatusHandler)
 	}
 	router.Handle("/probe", SetupMetrics(e.MetricsHandler))
 	router.Handle("/metrics", promhttp.Handler())
@@ -177,7 +177,7 @@ func InitExporter() (e *Exporter) {
 		<h1>Script Exporter</h1>
 		<p><a href='/metrics'>Metrics</a></p>
 		<p><a href='/probe'>Probe</a></p>
-		<p><a href='/probes-ok'>Probe Ok (if enabled)</a></p>
+		<p><a href='/probes-status'>Probe status (if enabled)</a></p>
 		<p><ul>
 		<li>version: ` + version.Version + `</li>
 		<li>branch: ` + version.Branch + `</li>

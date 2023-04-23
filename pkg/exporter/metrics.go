@@ -239,7 +239,7 @@ func (e *Exporter) ProbeStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 				go func() {
 					defer wg.Done()
-					res, errFetch := e.fetchProbeOk(clientApi, ctx, promUrl, ruleAlert)
+					res, errFetch := e.fetchProbeStatus(clientApi, ctx, promUrl, ruleAlert)
 					if errFetch != nil {
 						level.Error(e.Logger).Log("err", "An error occurred to fetch prometheus rule", ruleAlert.Name, err)
 						return

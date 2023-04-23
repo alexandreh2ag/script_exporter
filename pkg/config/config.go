@@ -46,13 +46,22 @@ type Config struct {
 	} `yaml:"discovery"`
 
 	Prometheus struct {
-		Enable     bool     `yaml:"enable"`
-		Host       string   `yaml:"host"`
-		Port       string   `yaml:"port"`
-		Scheme     string   `yaml:"scheme"`
-		Path       string   `yaml:"path"`
-		KeepLabels []string `yaml:"keep_labels"`
+		Host   string `yaml:"host"`
+		Port   string `yaml:"port"`
+		Scheme string `yaml:"scheme"`
+		Path   string `yaml:"path"`
 	} `yaml:"prometheus"`
+
+	ProbeStatus struct {
+		Enable       bool `yaml:"enable"`
+		StateMapping struct {
+			Ok      int `yaml:"ok"`
+			Firing  int `yaml:"firing"`
+			Warning int `yaml:"warning"`
+			Pending int `yaml:"pending"`
+		} `yaml:"state_mapping"`
+		KeepLabels []string `yaml:"keep_labels"`
+	} `yaml:"probe_status"`
 }
 
 // ScriptConfig is the configuration for a single script.
